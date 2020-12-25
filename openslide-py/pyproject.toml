@@ -4,4 +4,3 @@ build-backend = "maturin"
 
 [tool.maturin]
 bindings = "pyo3"
-manylinux = "off"
