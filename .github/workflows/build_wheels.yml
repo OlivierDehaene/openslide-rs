@@ -1,0 +1,30 @@
+name: build_wheels
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: debian-stable
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Update
+      run: apt update
+    - name: Install curl
+      run: apt install -y curl
+    - name: Install cargo
+      run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > install_rustup.sh && sh install_rustup.sh -y
+    - name: Install maturin
+      run: ~/.cargo/bin/cargo install maturin
+    - name: Install dependencies
+      run: apt install -y libcairo2-dev libgdk-pixbuf2.0-dev libglib2.0-dev libjpeg62-turbo-dev libopenjp2-7-dev libpng-dev libsqlite3-dev libtiff5-dev libxml2-dev libwebp-dev libzstd-dev
+    - name: Build wheels
+      run: maturin build
