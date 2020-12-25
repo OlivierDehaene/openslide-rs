@@ -40,8 +40,8 @@ impl _OpenSlide {
         }
     }
 
-    pub fn get_level_dimensions(&self, level: u32) -> (u64, u64) {
-        self.inner.get_level_dimensions(level)
+    pub fn level_dimensions(&self, level: u32) -> (u64, u64) {
+        self.inner.level_dimensions(level).unwrap()
     }
 
     pub fn read_region<'py>(
