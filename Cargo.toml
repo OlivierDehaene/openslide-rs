@@ -1,0 +1,23 @@
+[package]
+name = "openslide-rs"
+version = "0.1.0"
+authors = ["OlivierD <olivier.dehaene@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+openslide-sys = { path = "openslide-sys" }
+image = "^0.23"
+byteorder = "^1.3"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "reads"
+harness = false
+
+[workspace]
+members = [
+    "openslide-py",
+    "openslide-sys"
+]

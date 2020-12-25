@@ -1,0 +1,12 @@
+[package]
+name = "openslide-sys"
+version = "0.1.0"
+authors = ["roblabla <unfiltered@roblab.la>"]
+edition = "2018"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.59.2"
+cc = "1.0"
+pkg-config = "0.3"
