@@ -32,7 +32,7 @@ pub struct Size {
     pub w: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Region {
     pub address: Address,
     pub level: usize,

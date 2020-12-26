@@ -1,5 +1,4 @@
 use math::round;
-use std::cmp;
 
 use crate::openslide::{Address, OpenSlide, Region, Size};
 use crate::utils::resize_dimensions;
@@ -7,6 +6,10 @@ use image::imageops::thumbnail;
 use image::RgbaImage;
 
 pub struct DeepZoom<'a> {
+    pub level_count: usize,
+    pub level_tiles: Vec<Size>,
+    pub level_dimensions: Vec<Size>,
+
     slide: &'a OpenSlide,
     tile_size: u32,
     overlap: u32,
@@ -15,9 +18,6 @@ pub struct DeepZoom<'a> {
     l0_offset: Address,
     slide_level_dimensions: Vec<Size>,
     slide_level0_dimensions: Size,
-    level_dimensions: Vec<Size>,
-    level_tiles: Vec<Size>,
-    level_count: usize,
     slide_from_dz_level: Vec<usize>,
     l0_l_downsamples: Vec<f64>,
     l_z_downsamples: Vec<f64>,
@@ -91,8 +91,8 @@ impl<'a> DeepZoom<'a> {
         let mut level_dimensions = vec![z_size.clone()];
 
         while z_size.w > 1 || z_size.h > 1 {
-            z_size.w = cmp::max(1, round::ceil(z_size.w as f64 / 2.0, 0) as _) as _;
-            z_size.h = cmp::max(1, round::ceil(z_size.h as f64 / 2.0, 0) as _) as _;
+            z_size.w = (round::ceil(z_size.w as f64 / 2.0, 0) as u32).max(1) as _;
+            z_size.h = (round::ceil(z_size.h as f64 / 2.0, 0) as u32).max(1) as _;
 
             level_dimensions.push(z_size.clone());
         }
@@ -103,7 +103,7 @@ impl<'a> DeepZoom<'a> {
             .iter()
             .map(|Size { w, h }| Size {
                 w: round::ceil(*w as f64 / tile_size as f64, 0) as _,
-                h: round::ceil(*w as f64 / tile_size as f64, 0) as _,
+                h: round::ceil(*h as f64 / tile_size as f64, 0) as _,
             })
             .collect();
 
@@ -191,15 +191,15 @@ impl<'a> DeepZoom<'a> {
 
         // Get final size of the tile
         let z_size = Size {
-            w: cmp::min(
-                self.tile_size,
-                level_dimensions.w - self.tile_size * address.x,
-            ) + z_overlap_topleft.x
+            w: self
+                .tile_size
+                .min(level_dimensions.w - self.tile_size * address.x)
+                + z_overlap_topleft.x
                 + z_overlap_bottomright.x,
-            h: cmp::min(
-                self.tile_size,
-                level_dimensions.h - self.tile_size * address.y,
-            ) + z_overlap_topleft.y
+            h: self
+                .tile_size
+                .min(level_dimensions.h - self.tile_size * address.y)
+                + z_overlap_topleft.y
                 + z_overlap_bottomright.y,
         };
 
@@ -229,14 +229,10 @@ impl<'a> DeepZoom<'a> {
         };
 
         let l_size = Size {
-            w: cmp::min(
-                round::ceil(self.l_z_downsamples[level as usize] * z_size.w as f64, 0) as _,
-                slide_level_dimensions.w - l_location.x,
-            ),
-            h: cmp::min(
-                round::ceil(self.l_z_downsamples[level as usize] * z_size.h as f64, 0) as _,
-                slide_level_dimensions.h - l_location.y,
-            ),
+            w: (slide_level_dimensions.w - l_location.x)
+                .min(round::ceil(self.l_z_downsamples[level as usize] * z_size.w as f64, 0) as _),
+            h: (slide_level_dimensions.h - l_location.y)
+                .min(round::ceil(self.l_z_downsamples[level as usize] * z_size.h as f64, 0) as _),
         };
 
         let region = Region {
@@ -268,20 +264,5 @@ impl<'a> DeepZoom<'a> {
             tile = thumbnail(&tile, new_width, new_height);
         }
         Ok(tile)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn test_open() {
-        let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
-        let dz = DeepZoom::new(&slide, 224, 0, false);
-
-        let tile = dz.read_tile(9, Address { x: 0, y: 0 }).unwrap();
-        tile.save("tests/artifacts/test_tile.png").unwrap();
     }
 }
