@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+use std::fmt;
 use std::path::Path;
 use std::str;
 
@@ -9,14 +10,29 @@ use std::ptr::null_mut;
 
 use crate::utils::{decode_buffer, parse_null_terminated_array, WordRepresentation};
 
+#[derive(Debug)]
 pub struct Address {
     pub x: u32,
     pub y: u32,
 }
 
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct Size {
     pub h: u32,
     pub w: u32,
+}
+
+#[derive(Debug)]
+pub struct Region {
+    pub address: Address,
+    pub level: usize,
+    pub size: Size,
 }
 
 pub struct OpenSlide {
@@ -83,11 +99,11 @@ impl OpenSlide {
         Ok(level_count)
     }
 
-    pub fn dimensions(&self) -> Result<(u64, u64), String> {
+    pub fn dimensions(&self) -> Result<Size, String> {
         self.level_dimensions(0)
     }
 
-    pub fn level_dimensions(&self, level: u32) -> Result<(u64, u64), String> {
+    pub fn level_dimensions(&self, level: u32) -> Result<Size, String> {
         if level >= self.level_count()? {
             return Err(format!("Level {} out of range", level));
         }
@@ -100,7 +116,10 @@ impl OpenSlide {
 
         get_error(self.data)?;
 
-        Ok((w as _, h as _))
+        Ok(Size {
+            w: w as _,
+            h: h as _,
+        })
     }
 
     pub fn level_downsample(&self, level: u32) -> Result<f64, String> {
@@ -123,12 +142,13 @@ impl OpenSlide {
         Ok(best_level as _)
     }
 
-    pub fn read_region(
-        &self,
-        address: Address,
-        level: u32,
-        size: Size,
-    ) -> Result<RgbaImage, String> {
+    pub fn read_region(&self, region: Region) -> Result<RgbaImage, String> {
+        let Region {
+            address,
+            level,
+            size,
+        } = region;
+
         let mut dest = vec![0u32; (size.w * size.h) as _];
 
         unsafe {
@@ -262,14 +282,19 @@ mod tests {
     fn test_level_dimensions() {
         let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
         let dimensions = slide.level_dimensions(0).unwrap();
-        assert_eq!(dimensions, (2220, 2967));
+        assert_eq!(dimensions.w, 2220);
+        assert_eq!(dimensions.h, 2967);
     }
 
     #[test]
     fn test_read_region() {
         let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
         let region = slide
-            .read_region(Address { x: 0, y: 0 }, 0, Size { w: 3000, h: 3000 })
+            .read_region(Region {
+                address: Address { x: 0, y: 0 },
+                level: 0,
+                size: Size { w: 512, h: 512 },
+            })
             .unwrap();
 
         region.save("wsi_region_2.png").unwrap();

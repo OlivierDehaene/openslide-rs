@@ -8,6 +8,3 @@ target/
 
 # Maturin 
 *.so
-
-# Artifacts
-*.png
