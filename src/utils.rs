@@ -4,7 +4,53 @@ use std::str;
 use byteorder::ByteOrder;
 use image::{Rgba, RgbaImage};
 
-pub fn parse_null_terminated_array(array: *const *const i8) -> impl Iterator<Item = String> {
+/// Calculates the width and height an image should be resized to.
+/// This preserves aspect ratio, and based on the `fill` parameter
+/// will either fill the dimensions to fit inside the smaller constraint
+/// (will overflow the specified bounds on one axis to preserve
+/// aspect ratio), or will shrink so that both dimensions are
+/// completely contained with in the given `width` and `height`,
+/// with empty space on one axis.
+pub(crate) fn resize_dimensions(
+    width: u32,
+    height: u32,
+    nwidth: u32,
+    nheight: u32,
+    fill: bool,
+) -> (u32, u32) {
+    let ratio = u64::from(width) * u64::from(nheight);
+    let nratio = u64::from(nwidth) * u64::from(height);
+
+    let use_width = if fill {
+        nratio > ratio
+    } else {
+        nratio <= ratio
+    };
+    let intermediate = if use_width {
+        u64::from(height) * u64::from(nwidth) / u64::from(width)
+    } else {
+        u64::from(width) * u64::from(nheight) / u64::from(height)
+    };
+    if use_width {
+        if intermediate <= u64::from(::std::u32::MAX) {
+            (nwidth, intermediate as u32)
+        } else {
+            (
+                (u64::from(nwidth) * u64::from(::std::u32::MAX) / intermediate) as u32,
+                ::std::u32::MAX,
+            )
+        }
+    } else if intermediate <= u64::from(::std::u32::MAX) {
+        (intermediate as u32, nheight)
+    } else {
+        (
+            ::std::u32::MAX,
+            (u64::from(nheight) * u64::from(::std::u32::MAX) / intermediate) as u32,
+        )
+    }
+}
+
+pub(crate) fn parse_null_terminated_array(array: *const *const i8) -> impl Iterator<Item = String> {
     unsafe {
         let mut counter = 0;
         let mut loc = array;
@@ -31,7 +77,7 @@ pub fn parse_null_terminated_array(array: *const *const i8) -> impl Iterator<Ite
 /// value of a certain pixel. This enum determines in which order to arange these channels within
 /// one element.
 #[derive(Clone, Debug)]
-pub enum WordRepresentation {
+pub(crate) enum WordRepresentation {
     /// From most significant bit to least significant bit: `[alpha, red, green, blue]`
     BigEndian,
     /// From most significant bit to least significant bit: `[blue, green, red, alpha]`
@@ -40,7 +86,7 @@ pub enum WordRepresentation {
 
 /// This function takes a buffer, as the one obtained from openslide::read_region, and decodes into
 /// an Rgba image buffer.
-pub fn decode_buffer(
+pub(crate) fn decode_buffer(
     buffer: &Vec<u32>,
     width: u32,
     height: u32,

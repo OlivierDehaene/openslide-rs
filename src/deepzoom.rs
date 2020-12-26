@@ -1,8 +1,8 @@
 use math::round;
 use std::cmp;
-use std::path::Path;
 
 use crate::openslide::{Address, OpenSlide, Region, Size};
+use crate::utils::resize_dimensions;
 use image::imageops::thumbnail;
 use image::RgbaImage;
 
@@ -263,7 +263,9 @@ impl<'a> DeepZoom<'a> {
         let mut tile = self.slide.read_region(region)?;
 
         if tile.dimensions() != (size.w, size.h) {
-            tile = thumbnail(&tile, size.w, size.h);
+            let (new_width, new_height) =
+                resize_dimensions(tile.width(), tile.height(), size.w, size.h, false);
+            tile = thumbnail(&tile, new_width, new_height);
         }
         Ok(tile)
     }
@@ -272,6 +274,7 @@ impl<'a> DeepZoom<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_open() {
@@ -279,5 +282,6 @@ mod tests {
         let dz = DeepZoom::new(&slide, 224, 0, false);
 
         let tile = dz.read_tile(9, Address { x: 0, y: 0 }).unwrap();
+        tile.save("tests/artifacts/test_tile.png").unwrap();
     }
 }

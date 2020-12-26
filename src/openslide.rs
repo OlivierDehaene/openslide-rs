@@ -1,16 +1,20 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::path::Path;
 use std::str;
 
+use image::imageops::thumbnail;
 use image::RgbaImage;
 use openslide_sys as sys;
 use std::ptr::null_mut;
 
-use crate::utils::{decode_buffer, parse_null_terminated_array, WordRepresentation};
+use crate::utils::{
+    decode_buffer, parse_null_terminated_array, resize_dimensions, WordRepresentation,
+};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Address {
     pub x: u32,
     pub y: u32,
@@ -22,7 +26,7 @@ impl fmt::Display for Address {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Size {
     pub h: u32,
     pub w: u32,
@@ -54,32 +58,33 @@ impl Drop for OpenSlide {
 }
 
 impl OpenSlide {
-    pub fn detect_vendor(path: &Path) -> Option<String> {
+    pub fn detect_vendor(path: &Path) -> Result<String, String> {
+        if !path.exists() {
+            return Err(format!("Missing image file: {}", path.display()));
+        }
+
         let cstr = CString::new(path.to_str().unwrap()).unwrap();
         unsafe {
             let slice = sys::openslide_detect_vendor(cstr.as_ptr());
 
             if slice.is_null() {
-                None
+                Err(format!("Unsupported image file: {}", path.display()))
             } else {
-                Some(CStr::from_ptr(slice).to_string_lossy().into_owned())
+                Ok(CStr::from_ptr(slice).to_string_lossy().into_owned())
             }
         }
     }
 
     pub fn open(path: &Path) -> Result<OpenSlide, String> {
         if !path.exists() {
-            return Err(String::from(format!(
-                "Missing image file: {}",
-                path.display()
-            )));
+            return Err(format!("Missing image file: {}", path.display()));
         }
 
         let path_cstr = CString::new(path.to_str().unwrap()).unwrap();
         let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
 
         if slide_ptr.is_null() {
-            return Err(String::from("Unsupported image file"));
+            return Err(format!("Unsupported image file: {}", path.display()));
         }
         get_error(slide_ptr)?;
 
@@ -182,6 +187,10 @@ impl OpenSlide {
     }
 
     pub fn associated_image(&self, name: &str) -> Result<RgbaImage, String> {
+        if !self.associated_image_names()?.iter().any(|n| n == name) {
+            return Err(format!("Associated image {} does not exist", name));
+        };
+
         let cstr = CString::new(name).unwrap();
 
         let mut w = 0;
@@ -211,6 +220,29 @@ impl OpenSlide {
             WordRepresentation::BigEndian,
         ))
     }
+
+    pub fn thumbnail(&self, size: Size) -> Result<RgbaImage, String> {
+        let dimensions = self.dimensions()?;
+        let downsample_w = dimensions.w as f64 / size.w as f64;
+        let downsample_h = dimensions.h as f64 / size.h as f64;
+
+        let max_downsample = match downsample_w.partial_cmp(&downsample_h).unwrap() {
+            Ordering::Less => downsample_h,
+            Ordering::Equal => downsample_w,
+            Ordering::Greater => downsample_w,
+        };
+
+        let level = self.best_level_for_downsample(max_downsample)?;
+
+        let tile = self.read_region(Region {
+            address: Address { x: 0, y: 0 },
+            level: level as _,
+            size: self.level_dimensions(level)?,
+        })?;
+        let (new_width, new_height) =
+            resize_dimensions(tile.width(), tile.height(), size.w, size.h, false);
+        Ok(thumbnail(&tile, new_width, new_height))
+    }
 }
 
 fn get_error(slide_ptr: *mut sys::OpenSlide) -> Result<(), String> {
@@ -239,7 +271,7 @@ fn get_property(slide_ptr: *mut sys::OpenSlide, name: &str) -> Result<String, St
     get_error(slide_ptr)?;
 
     match value {
-        None => Err(format!("Property {} doesn't exist.", name)),
+        None => Err(format!("Property {} does not exist.", name)),
         Some(value) => Ok(value),
     }
 }
@@ -264,62 +296,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_open() {
-        let res = OpenSlide::open(Path::new("tests/assets/default.svs"));
-        match res {
-            Ok(_) => (),
-            Err(message) => panic!(message),
-        }
+    #[should_panic(expected = "Unsupported TIFF compression: 52479")]
+    fn test_get_error() {
+        let path_cstr = CString::new("tests/assets/unopenable.tiff").unwrap();
+        let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
+
+        get_error(slide_ptr).unwrap();
     }
 
     #[test]
-    fn test_detect_vendor() {
-        let format = OpenSlide::detect_vendor(Path::new("tests/assets/default.svs"));
-        assert_eq!(format.unwrap(), "aperio");
+    #[should_panic(expected = "Property __missing does not exist.")]
+    fn test_get_property() {
+        let path_cstr = CString::new("tests/assets/boxes.tiff").unwrap();
+        let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
+
+        let value = get_property(slide_ptr, "openslide.vendor").unwrap();
+        assert_eq!(value, "generic-tiff");
+
+        get_property(slide_ptr, "__missing").unwrap();
     }
 
     #[test]
-    fn test_level_dimensions() {
-        let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
-        let dimensions = slide.level_dimensions(0).unwrap();
-        assert_eq!(dimensions.w, 2220);
-        assert_eq!(dimensions.h, 2967);
-    }
+    fn test_get_properties() {
+        let path_cstr = CString::new("tests/assets/boxes.tiff").unwrap();
+        let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
 
-    #[test]
-    fn test_read_region() {
-        let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
-        let region = slide
-            .read_region(Region {
-                address: Address { x: 0, y: 0 },
-                level: 0,
-                size: Size { w: 512, h: 512 },
-            })
-            .unwrap();
-
-        region.save("wsi_region_2.png").unwrap();
-    }
-
-    #[test]
-    fn test_properties() {
-        let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
-
-        assert_eq!(slide.properties.get("aperio.MPP").unwrap(), "0.4990");
-    }
-
-    #[test]
-    fn test_associated_image_names() {
-        let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
-        let associated_image_names = slide.associated_image_names().unwrap();
-
-        assert_eq!(associated_image_names, vec!["label", "macro", "thumbnail"]);
-    }
-
-    #[test]
-    fn test_associated_image() {
-        let slide = OpenSlide::open(Path::new("tests/assets/default.svs")).unwrap();
-        let associated_image = slide.associated_image("label").unwrap();
-
-        associated_image.save("associated_image.png").unwrap();
+        let properties = get_properties(slide_ptr).unwrap();
+        assert_eq!(properties.get("openslide.vendor").unwrap(), "generic-tiff");
     }
 }
