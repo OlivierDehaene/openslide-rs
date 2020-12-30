@@ -13,6 +13,7 @@ use std::ptr::null_mut;
 use crate::utils::{
     decode_buffer, parse_null_terminated_array, resize_dimensions, WordRepresentation,
 };
+use crate::{OpenSlideError, Result};
 
 #[derive(Debug, PartialEq)]
 pub struct Address {
@@ -26,10 +27,34 @@ impl fmt::Display for Address {
     }
 }
 
+impl<T> From<(T, T)> for Address
+where
+    T: Clone + Into<u32>,
+{
+    fn from(address: (T, T)) -> Self {
+        Address {
+            x: address.0.into(),
+            y: address.1.into(),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Size {
     pub h: u32,
     pub w: u32,
+}
+
+impl<T> From<(T, T)> for Size
+where
+    T: Clone + Into<u32>,
+{
+    fn from(size: (T, T)) -> Self {
+        Size {
+            w: size.0.into(),
+            h: size.1.into(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,9 +83,9 @@ impl Drop for OpenSlide {
 }
 
 impl OpenSlide {
-    pub fn detect_vendor(path: &Path) -> Result<String, String> {
+    pub fn detect_vendor(path: &Path) -> Result<String> {
         if !path.exists() {
-            return Err(format!("Missing image file: {}", path.display()));
+            return Err(OpenSlideError::MissingFile(path.display().to_string()));
         }
 
         let cstr = CString::new(path.to_str().unwrap()).unwrap();
@@ -68,23 +93,23 @@ impl OpenSlide {
             let slice = sys::openslide_detect_vendor(cstr.as_ptr());
 
             if slice.is_null() {
-                Err(format!("Unsupported image file: {}", path.display()))
+                Err(OpenSlideError::UnsupportedFile(path.display().to_string()))
             } else {
                 Ok(CStr::from_ptr(slice).to_string_lossy().into_owned())
             }
         }
     }
 
-    pub fn open(path: &Path) -> Result<OpenSlide, String> {
+    pub fn open(path: &Path) -> Result<OpenSlide> {
         if !path.exists() {
-            return Err(format!("Missing image file: {}", path.display()));
+            return Err(OpenSlideError::MissingFile(path.display().to_string()));
         }
 
         let path_cstr = CString::new(path.to_str().unwrap()).unwrap();
         let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
 
         if slide_ptr.is_null() {
-            return Err(format!("Unsupported image file: {}", path.display()));
+            return Err(OpenSlideError::UnsupportedFile(path.display().to_string()));
         }
         get_error(slide_ptr)?;
 
@@ -96,21 +121,30 @@ impl OpenSlide {
         Ok(slide)
     }
 
+    pub fn set_cache_size(&self, cache_size: i32) {
+        unsafe {
+            sys::openslide_set_cache_size(self.data, cache_size);
+        }
+    }
+
     /// The number of levels in the image.
-    pub fn level_count(&self) -> Result<u32, String> {
+    pub fn level_count(&self) -> Result<u32> {
         let level_count = unsafe { sys::openslide_get_level_count(self.data) as u32 };
         get_error(self.data)?;
 
         Ok(level_count)
     }
 
-    pub fn dimensions(&self) -> Result<Size, String> {
+    pub fn dimensions(&self) -> Result<Size> {
         self.level_dimensions(0)
     }
 
-    pub fn level_dimensions(&self, level: u32) -> Result<Size, String> {
+    pub fn level_dimensions(&self, level: u32) -> Result<Size> {
         if level >= self.level_count()? {
-            return Err(format!("Level {} out of range", level));
+            return Err(OpenSlideError::InternalError(format!(
+                "Level {} out of range",
+                level
+            )));
         }
 
         let mut w = 0;
@@ -127,9 +161,12 @@ impl OpenSlide {
         })
     }
 
-    pub fn level_downsample(&self, level: u32) -> Result<f64, String> {
+    pub fn level_downsample(&self, level: u32) -> Result<f64> {
         if level >= self.level_count()? {
-            return Err(format!("Level {} out of range", level));
+            return Err(OpenSlideError::InternalError(format!(
+                "Level {} out of range",
+                level
+            )));
         }
 
         let level_downsample =
@@ -139,7 +176,7 @@ impl OpenSlide {
         Ok(level_downsample)
     }
 
-    pub fn best_level_for_downsample(&self, downsample: f64) -> Result<u32, String> {
+    pub fn best_level_for_downsample(&self, downsample: f64) -> Result<u32> {
         let best_level =
             unsafe { sys::openslide_get_best_level_for_downsample(self.data, downsample) };
         get_error(self.data)?;
@@ -147,7 +184,7 @@ impl OpenSlide {
         Ok(best_level as _)
     }
 
-    pub fn read_region(&self, region: Region) -> Result<RgbaImage, String> {
+    pub fn read_region(&self, region: Region) -> Result<RgbaImage> {
         let Region {
             address,
             level,
@@ -177,7 +214,7 @@ impl OpenSlide {
         ))
     }
 
-    pub fn associated_image_names(&self) -> Result<Vec<String>, String> {
+    pub fn associated_image_names(&self) -> Result<Vec<String>> {
         unsafe {
             let name_array = sys::openslide_get_associated_image_names(self.data);
             get_error(self.data)?;
@@ -186,9 +223,12 @@ impl OpenSlide {
         }
     }
 
-    pub fn associated_image(&self, name: &str) -> Result<RgbaImage, String> {
+    pub fn associated_image(&self, name: &str) -> Result<RgbaImage> {
         if !self.associated_image_names()?.iter().any(|n| n == name) {
-            return Err(format!("Associated image {} does not exist", name));
+            return Err(OpenSlideError::InternalError(format!(
+                "Associated image {} does not exist",
+                name
+            )));
         };
 
         let cstr = CString::new(name).unwrap();
@@ -221,7 +261,7 @@ impl OpenSlide {
         ))
     }
 
-    pub fn thumbnail(&self, size: Size) -> Result<RgbaImage, String> {
+    pub fn thumbnail(&self, size: Size) -> Result<RgbaImage> {
         let dimensions = self.dimensions()?;
         let downsample_w = dimensions.w as f64 / size.w as f64;
         let downsample_h = dimensions.h as f64 / size.h as f64;
@@ -245,19 +285,21 @@ impl OpenSlide {
     }
 }
 
-fn get_error(slide_ptr: *mut sys::OpenSlide) -> Result<(), String> {
+fn get_error(slide_ptr: *mut sys::OpenSlide) -> Result<()> {
     unsafe {
         let slice = sys::openslide_get_error(slide_ptr);
 
         if slice.is_null() {
             Ok(())
         } else {
-            Err(CStr::from_ptr(slice).to_string_lossy().into_owned())
+            Err(OpenSlideError::InternalError(
+                CStr::from_ptr(slice).to_string_lossy().into_owned(),
+            ))
         }
     }
 }
 
-fn get_property(slide_ptr: *mut sys::OpenSlide, name: &str) -> Result<String, String> {
+fn get_property(slide_ptr: *mut sys::OpenSlide, name: &str) -> Result<String> {
     let cstr = CString::new(name).unwrap();
     let value = unsafe {
         let slice = sys::openslide_get_property_value(slide_ptr, cstr.as_ptr());
@@ -271,12 +313,12 @@ fn get_property(slide_ptr: *mut sys::OpenSlide, name: &str) -> Result<String, St
     get_error(slide_ptr)?;
 
     match value {
-        None => Err(format!("Property {} does not exist.", name)),
+        None => Err(OpenSlideError::KeyError(name.into())),
         Some(value) => Ok(value),
     }
 }
 
-fn get_properties(slide_ptr: *mut sys::OpenSlide) -> Result<HashMap<String, String>, String> {
+fn get_properties(slide_ptr: *mut sys::OpenSlide) -> Result<HashMap<String, String>> {
     unsafe {
         let name_array = sys::openslide_get_property_names(slide_ptr);
         get_error(slide_ptr)?;
@@ -296,7 +338,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "Unsupported TIFF compression: 52479")]
+    #[should_panic(expected = "InternalError: Unsupported TIFF compression: 52479")]
     fn test_get_error() {
         let path_cstr = CString::new("tests/assets/unopenable.tiff").unwrap();
         let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
@@ -305,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Property __missing does not exist.")]
+    #[should_panic(expected = "KeyError: __missing")]
     fn test_get_property() {
         let path_cstr = CString::new("tests/assets/boxes.tiff").unwrap();
         let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };

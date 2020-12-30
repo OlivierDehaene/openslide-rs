@@ -731,3 +731,13 @@ void openslide_read_associated_image(openslide_t *osr,
 const char *openslide_get_version(void) {
   return SUFFIXED_VERSION;
 }
+
+void openslide_set_cache_size(openslide_t *osr, int32_t cache_size) {
+  if (openslide_get_error(osr)) {
+    return;
+  }
+  if (osr->cache) {
+    _openslide_cache_destroy(osr->cache);
+  }
+  osr->cache = _openslide_cache_create(cache_size);
+}

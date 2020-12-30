@@ -5,18 +5,21 @@ use std::path::Path;
 mod common;
 
 #[test]
-fn test_detect_format() {
+#[should_panic(expected = "MissingFile: __missing")]
+fn test_detect_format_missing() {
     let missing_file = common::missing_file();
-    let expected = Some(format!("Missing image file: {}", missing_file.display()));
-    assert_eq!(OpenSlide::detect_vendor(missing_file).err(), expected);
+    OpenSlide::detect_vendor(missing_file).unwrap();
+}
 
-    let unsupported_file = common::unsupported_file();
-    let expected = Some(format!(
-        "Unsupported image file: {}",
-        unsupported_file.display()
-    ));
-    assert_eq!(OpenSlide::detect_vendor(unsupported_file).err(), expected);
+#[test]
+#[should_panic(expected = "UnsupportedFile: Cargo.toml")]
+fn test_detect_format_unsupported() {
+    let missing_file = common::unsupported_file();
+    OpenSlide::detect_vendor(missing_file).unwrap();
+}
 
+#[test]
+fn test_detect_format() {
     let boxes_tiff_path = common::boxes_tiff();
     assert_eq!(
         "generic-tiff",
@@ -25,21 +28,24 @@ fn test_detect_format() {
 }
 
 #[test]
-fn test_open_errors() {
+#[should_panic(expected = "MissingFile: __missing")]
+fn test_open_missing() {
     let missing_file = common::missing_file();
-    let expected = Some(format!("Missing image file: {}", missing_file.display()));
-    assert_eq!(OpenSlide::open(missing_file).err(), expected);
+    OpenSlide::open(missing_file).unwrap();
+}
 
-    let unsupported_file = common::unsupported_file();
-    let expected = Some(format!(
-        "Unsupported image file: {}",
-        unsupported_file.display()
-    ));
-    assert_eq!(OpenSlide::open(unsupported_file).err(), expected);
+#[test]
+#[should_panic(expected = "UnsupportedFile: Cargo.toml")]
+fn test_open_unsupported() {
+    let missing_file = common::unsupported_file();
+    OpenSlide::open(missing_file).unwrap();
+}
 
+#[test]
+#[should_panic(expected = "InternalError: Unsupported TIFF compression: 52479")]
+fn test_open_unsupported_tiff() {
     let unopenable_tiff = common::unopenable_tiff();
-    let expected = Some(String::from("Unsupported TIFF compression: 52479"));
-    assert_eq!(OpenSlide::open(unopenable_tiff).err(), expected);
+    OpenSlide::open(unopenable_tiff).unwrap();
 }
 
 #[test]
@@ -104,7 +110,7 @@ fn test_thumbnail() {
 }
 
 #[test]
-#[should_panic(expected = "Associated image __missing does not exist")]
+#[should_panic(expected = "InternalError: Associated image __missing does not exist")]
 fn test_associated_images() {
     let slide = OpenSlide::open(common::small_svs()).unwrap();
 
@@ -116,7 +122,9 @@ fn test_associated_images() {
 }
 
 #[test]
-#[should_panic(expected = "Corrupt JPEG data: 226 extraneous bytes before marker 0xd9")]
+#[should_panic(
+    expected = "InternalError: Corrupt JPEG data: 226 extraneous bytes before marker 0xd9"
+)]
 fn test_read_bad_region() {
     let slide = OpenSlide::open(common::unreadable_svs()).unwrap();
 
@@ -130,7 +138,7 @@ fn test_read_bad_region() {
 }
 
 #[test]
-#[should_panic(expected = "TIFFRGBAImageGet failed")]
+#[should_panic(expected = "InternalError: TIFFRGBAImageGet failed")]
 fn test_read_bad_associated_image() {
     let slide = OpenSlide::open(common::unreadable_svs()).unwrap();
     slide.associated_image("thumbnail").unwrap();

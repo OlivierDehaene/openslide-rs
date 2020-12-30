@@ -2,6 +2,7 @@ use math::round;
 
 use crate::openslide::{Address, OpenSlide, Region, Size};
 use crate::utils::resize_dimensions;
+use crate::{OpenSlideError, Result};
 use image::imageops::thumbnail;
 use image::RgbaImage;
 
@@ -154,15 +155,21 @@ impl<'a> DeepZoom<'a> {
         }
     }
 
-    fn tile_info(&self, level: u32, address: Address) -> Result<(Region, Size), String> {
+    fn tile_info(&self, level: u32, address: Address) -> Result<(Region, Size)> {
         if level as usize >= self.level_count {
-            return Err(format!("Level {} out of range", level));
+            return Err(OpenSlideError::InternalError(format!(
+                "Level {} out of range",
+                level
+            )));
         }
 
         let level_dimensions = self.level_dimensions[level as usize];
 
         if address.x >= level_dimensions.w || address.y > level_dimensions.h {
-            return Err(format!("Address {} out of range", address));
+            return Err(OpenSlideError::InternalError(format!(
+                "Address {} out of range",
+                address
+            )));
         }
 
         // Get preferred slide level
@@ -244,17 +251,17 @@ impl<'a> DeepZoom<'a> {
         Ok((region, z_size))
     }
 
-    pub fn tile_region(&self, level: u32, address: Address) -> Result<Region, String> {
+    pub fn tile_region(&self, level: u32, address: Address) -> Result<Region> {
         let (region, _) = self.tile_info(level, address)?;
         Ok(region)
     }
 
-    pub fn tile_size(&self, level: u32, address: Address) -> Result<Size, String> {
+    pub fn tile_size(&self, level: u32, address: Address) -> Result<Size> {
         let (_, size) = self.tile_info(level, address)?;
         Ok(size)
     }
 
-    pub fn read_tile(&self, level: u32, address: Address) -> Result<RgbaImage, String> {
+    pub fn read_tile(&self, level: u32, address: Address) -> Result<RgbaImage> {
         let (region, size) = self.tile_info(level, address)?;
         let mut tile = self.slide.read_region(region)?;
 

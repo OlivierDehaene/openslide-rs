@@ -1,66 +1,117 @@
+use pyo3::exceptions::{PyFileNotFoundError, PyKeyError, PyOSError};
 use pyo3::prelude::*;
 use pyo3::{wrap_pyfunction, PyClass};
+use std::error;
 use std::error::Error;
+use std::fmt;
+use std::mem;
 use std::path::Path;
 
 use ndarray_image::{NdColor, NdImage};
 use numpy::{IntoPyArray, PyArray3};
 use openslide_rs;
-use pyo3::callback::IntoPyCallbackOutput;
-use pyo3::class::context::{PyContextEnterProtocol, PyContextExitProtocol, PyContextProtocol};
-use pyo3::types::PyType;
+use pyo3::ffi::PyOS_AfterFork;
+use pyo3::types::{PyDict, PyType};
+use std::collections::HashMap;
+
+fn match_error(error: openslide_rs::OpenSlideError) -> PyErr {
+    match error {
+        openslide_rs::OpenSlideError::MissingFile(m) => PyFileNotFoundError::new_err(m),
+        openslide_rs::OpenSlideError::UnsupportedFile(m) => PyOSError::new_err(m),
+        openslide_rs::OpenSlideError::KeyError(m) => PyKeyError::new_err(m),
+        openslide_rs::OpenSlideError::InternalError(m) => PyOSError::new_err(m),
+    }
+}
 
 #[pyclass]
 struct _OpenSlide {
     inner: openslide_rs::OpenSlide,
 }
 
-// #[pyproto]
-// impl<'p> PyContextProtocol<'p> for OpenSlide {
-//     fn __enter__(&'p mut self) -> PyResult<&mut OpenSlide> {
-//         Ok(self)
-//     }
-//
-//     fn __exit__(
-//         &mut self,
-//         ty: Option<&'p PyType>,
-//         _value: Option<&'p PyAny>,
-//         _traceback: Option<&'p PyAny>,
-//     ) -> PyResult<()> {
-//         Ok(())
-//     }
-// }
-
 #[pymethods]
 impl _OpenSlide {
+    #[classmethod]
+    fn detect_format(_cls: &PyType, filename: &str) -> PyResult<String> {
+        openslide_rs::OpenSlide::detect_vendor(Path::new(filename)).map_err(match_error)
+    }
+
     #[new]
-    fn new(filename: &str) -> Self {
-        _OpenSlide {
-            inner: openslide_rs::OpenSlide::open(Path::new(filename)).unwrap(),
-        }
+    fn new(filename: &str) -> PyResult<Self> {
+        let inner = openslide_rs::OpenSlide::open(Path::new(filename)).map_err(match_error)?;
+        Ok(_OpenSlide { inner })
     }
 
-    pub fn level_dimensions(&self, level: u32) -> (u64, u64) {
-        self.inner.level_dimensions(level).unwrap()
+    fn level_dimensions(&self, level: u32) -> PyResult<(u64, u64)> {
+        let openslide_rs::Size { w, h } =
+            self.inner.level_dimensions(level).map_err(match_error)?;
+        Ok((w as u64, h as u64))
     }
 
-    pub fn read_region<'py>(
+    fn level_downsample(&self, level: u32) -> PyResult<f64> {
+        self.inner.level_downsample(level).map_err(match_error)
+    }
+
+    fn best_level_for_downsample(&self, downsample: f64) -> PyResult<u32> {
+        self.inner
+            .best_level_for_downsample(downsample)
+            .map_err(match_error)
+    }
+
+    fn associated_image<'py>(&self, py: Python<'py>, name: &str) -> PyResult<&'py PyArray3<u8>> {
+        let image = self.inner.associated_image(name).map_err(match_error)?;
+        let image: NdColor = NdImage(&image).into();
+        Ok(image.to_owned().into_pyarray(py))
+    }
+
+    #[getter]
+    fn level_count(&self) -> PyResult<u32> {
+        self.inner.level_count().map_err(match_error)
+    }
+
+    #[getter]
+    fn all_level_dimensions(&self) -> PyResult<Vec<(u64, u64)>> {
+        let dimensions = (0..self.level_count()?)
+            .map(|level| self.level_dimensions(level).unwrap())
+            .collect();
+        Ok(dimensions)
+    }
+
+    #[getter]
+    fn all_level_downsample(&self) -> PyResult<Vec<f64>> {
+        let dimensions = (0..self.level_count()?)
+            .map(|level| self.level_downsample(level).unwrap())
+            .collect();
+        Ok(dimensions)
+    }
+
+    #[getter]
+    fn properties(&self) -> HashMap<String, String> {
+        self.inner.properties.clone()
+    }
+
+    #[getter]
+    fn associated_image_names(&self) -> PyResult<Vec<String>> {
+        self.inner.associated_image_names().map_err(match_error)
+    }
+
+    fn read_region<'py>(
         &self,
         py: Python<'py>,
         address: (u32, u32),
         level: u32,
         size: (u32, u32),
-    ) -> &'py PyArray3<u8> {
+    ) -> PyResult<&'py PyArray3<u8>> {
+        let region_coordinates = openslide_rs::Region {
+            address: openslide_rs::Address::from(address),
+            level: level as _,
+            size: openslide_rs::Size::from(size),
+        };
         let region = self
             .inner
-            .read_region(
-                openslide_rs::Address::new(address.0, address.1),
-                level,
-                openslide_rs::Size::new(size.0, size.1),
-            )
-            .unwrap();
+            .read_region(region_coordinates)
+            .map_err(match_error)?;
         let region: NdColor = NdImage(&region).into();
-        region.to_owned().into_pyarray(py)
+        Ok(region.to_owned().into_pyarray(py))
     }
 }
 

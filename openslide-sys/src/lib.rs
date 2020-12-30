@@ -60,6 +60,16 @@ extern "C" {
 }
 extern "C" {
     /**
+     * Set the cache size of the whole slide image.
+     *
+     * @param osr The OpenSlide object.
+     * @param level The cache size in bytes
+     * @since 3.3.0
+     */
+    pub fn openslide_set_cache_size(osr: *mut OpenSlide, cache_size: i32);
+}
+extern "C" {
+    /**
      * Get the dimensions of level 0 (the largest level). Exactly
      * equivalent to calling openslide_get_level_dimensions(osr, 0, w, h).
      *
