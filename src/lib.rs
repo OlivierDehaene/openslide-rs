@@ -1,4 +1,4 @@
-use std::error;
+
 use std::fmt;
 
 pub use openslide::{Address, OpenSlide, Region, Size};

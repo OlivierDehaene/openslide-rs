@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
+
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::path::Path;
