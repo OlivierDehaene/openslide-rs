@@ -60,13 +60,14 @@ class OpenSlide:
     operations on the OpenSlide object, other than close(), will fail.
     """
 
-    def __init__(self, filename: Union[str, Path]):
+    def __init__(self, filename: Union[str, Path], cache_size: int = 1024 * 1024 * 32):
         """Open a whole-slide image."""
         if isinstance(filename, str):
             filename = Path(filename)
 
         self._filename = filename
         self._osr = _OpenSlide(str(filename))
+        self.cache_size = cache_size
 
     def close(self):
         self._osr = None
@@ -94,6 +95,16 @@ class OpenSlide:
             filename = str(filename)
 
         return _OpenSlide.detect_format(filename)
+
+    @property
+    def cache_size(self):
+        return self._cache_size
+
+    @cache_size.setter
+    def cache_size(self, size: int):
+        self._check_closed()
+        self._osr.set_cache_size(size)
+        self._cache_size = size
 
     @property
     def level_count(self):

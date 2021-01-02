@@ -74,10 +74,7 @@ fn test_basic_metadata() {
 fn test_properties() {
     let slide = OpenSlide::open(common::boxes_tiff()).unwrap();
 
-    assert_eq!(
-        slide.property("openslide.vendor").unwrap(),
-        "generic-tiff"
-    );
+    assert_eq!(slide.property("openslide.vendor").unwrap(), "generic-tiff");
 }
 
 #[test]
@@ -122,9 +119,7 @@ fn test_associated_images() {
 }
 
 #[test]
-#[should_panic(
-    expected = "Corrupt JPEG data: 226 extraneous bytes before marker 0xd9"
-)]
+#[should_panic(expected = "Corrupt JPEG data: 226 extraneous bytes before marker 0xd9")]
 fn test_read_bad_region() {
     let slide = OpenSlide::open(common::unreadable_svs()).unwrap();
 

@@ -10,10 +10,10 @@ use std::path::Path;
 use ndarray_image::{NdColor, NdImage};
 use numpy::{IntoPyArray, PyArray3};
 use openslide_rs;
-use pyo3::ffi::PyOS_AfterFork;
-use pyo3::types::{PyDict, PyType};
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
+use pyo3::ffi::PyOS_AfterFork;
+use pyo3::types::{PyDict, PyType};
 use std::collections::HashMap;
 
 create_exception!(openslide_py, OpenSlideError, PyException);
@@ -22,7 +22,9 @@ create_exception!(openslide_py, OpenSlideUnsupportedFormatError, PyException);
 fn match_error(error: openslide_rs::OpenSlideError) -> PyErr {
     match error {
         openslide_rs::OpenSlideError::MissingFile(m) => PyFileNotFoundError::new_err(m),
-        openslide_rs::OpenSlideError::UnsupportedFile(m) => OpenSlideUnsupportedFormatError::new_err(m),
+        openslide_rs::OpenSlideError::UnsupportedFile(m) => {
+            OpenSlideUnsupportedFormatError::new_err(m)
+        }
         openslide_rs::OpenSlideError::KeyError(m) => PyKeyError::new_err(m),
         openslide_rs::OpenSlideError::InternalError(m) => OpenSlideError::new_err(m),
     }
@@ -99,6 +101,10 @@ impl _OpenSlide {
         self.inner.associated_image_names().map_err(match_error)
     }
 
+    fn set_cache_size(&self, cache_size: u32) -> PyResult<()> {
+        self.inner.set_cache_size(cache_size).map_err(match_error)
+    }
+
     fn read_region<'py>(
         &self,
         py: Python<'py>,
@@ -125,7 +131,10 @@ impl _OpenSlide {
 fn openslide_py(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<_OpenSlide>()?;
     m.add("OpenSlideError", py.get_type::<OpenSlideError>())?;
-    m.add("OpenSlideUnsupportedFormatError", py.get_type::<OpenSlideUnsupportedFormatError>())?;
+    m.add(
+        "OpenSlideUnsupportedFormatError",
+        py.get_type::<OpenSlideUnsupportedFormatError>(),
+    )?;
 
     Ok(())
 }

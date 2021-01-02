@@ -28,8 +28,8 @@ impl fmt::Display for Address {
 }
 
 impl<T> From<(T, T)> for Address
-    where
-        T: Clone + Into<u32>,
+where
+    T: Clone + Into<u32>,
 {
     fn from(address: (T, T)) -> Self {
         Address {
@@ -46,8 +46,8 @@ pub struct Size {
 }
 
 impl<T> From<(T, T)> for Size
-    where
-        T: Clone + Into<u32>,
+where
+    T: Clone + Into<u32>,
 {
     fn from(size: (T, T)) -> Self {
         Size {
@@ -110,17 +110,16 @@ impl OpenSlide {
         }
         get_error(slide_ptr)?;
 
-        let slide = OpenSlide {
-            data: slide_ptr,
-        };
+        let slide = OpenSlide { data: slide_ptr };
 
         Ok(slide)
     }
 
-    pub fn set_cache_size(&self, cache_size: i32) {
+    pub fn set_cache_size(&self, cache_size: u32) -> Result<()> {
         unsafe {
-            sys::openslide_set_cache_size(self.data, cache_size);
+            sys::openslide_set_cache_size(self.data, cache_size as _);
         }
+        get_error(self.data)
     }
 
     /// The number of levels in the image.
@@ -221,8 +220,7 @@ impl OpenSlide {
 
     pub fn property(&self, name: &str) -> Result<String> {
         if !self.property_names()?.iter().any(|n| n == name) {
-            return Err(OpenSlideError::KeyError(name.into()
-            ));
+            return Err(OpenSlideError::KeyError(name.into()));
         };
 
         let cstr = CString::new(name).unwrap();
@@ -243,7 +241,6 @@ impl OpenSlide {
         }
     }
 
-
     pub fn associated_image_names(&self) -> Result<Vec<String>> {
         unsafe {
             let name_array = sys::openslide_get_associated_image_names(self.data);
@@ -255,8 +252,7 @@ impl OpenSlide {
 
     pub fn associated_image(&self, name: &str) -> Result<RgbaImage> {
         if !self.associated_image_names()?.iter().any(|n| n == name) {
-            return Err(OpenSlideError::KeyError(name.into()
-            ));
+            return Err(OpenSlideError::KeyError(name.into()));
         };
 
         let cstr = CString::new(name).unwrap();
@@ -326,7 +322,6 @@ fn get_error(slide_ptr: *mut sys::OpenSlide) -> Result<()> {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
