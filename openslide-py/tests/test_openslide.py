@@ -91,7 +91,8 @@ def test_properties(boxes_tiff):
         slide.properties["__missing"]
 
 
-def test_read_region_2GB(boxes_tiff):
+@pytest.mark.skip
+def test_read_region_2gb(boxes_tiff):
     slide = OpenSlide(boxes_tiff)
 
     assert slide.read_region((1000, 1000), 0, (32768, 16384)).size == (32768, 16384)
@@ -128,4 +129,3 @@ def test_read_bad_associated_image(unreadable_svs):
 
     with pytest.raises(OpenSlideError):
         slide.associated_images["thumbnail"]
-

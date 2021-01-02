@@ -1,20 +1,15 @@
-use pyo3::exceptions::{PyFileNotFoundError, PyKeyError, PyOSError};
+use pyo3::exceptions::{PyFileNotFoundError, PyKeyError};
 use pyo3::prelude::*;
-use pyo3::{wrap_pyfunction, PyClass};
-use std::error;
-use std::error::Error;
-use std::fmt;
-use std::mem;
+
 use std::path::Path;
 
 use ndarray_image::{NdColor, NdImage};
 use numpy::{IntoPyArray, PyArray3};
-use openslide_rs;
+
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
-use pyo3::ffi::PyOS_AfterFork;
-use pyo3::types::{PyDict, PyType};
-use std::collections::HashMap;
+
+use pyo3::types::PyType;
 
 create_exception!(openslide_py, OpenSlideError, PyException);
 create_exception!(openslide_py, OpenSlideUnsupportedFormatError, PyException);
@@ -64,6 +59,10 @@ impl _OpenSlide {
             .map_err(match_error)
     }
 
+    fn property(&self, name: &str) -> PyResult<String> {
+        self.inner.property(name).map_err(match_error)
+    }
+
     fn associated_image<'py>(&self, py: Python<'py>, name: &str) -> PyResult<&'py PyArray3<u8>> {
         let image = self.inner.associated_image(name).map_err(match_error)?;
         let image: NdColor = NdImage(&image).into();
@@ -92,8 +91,8 @@ impl _OpenSlide {
     }
 
     #[getter]
-    fn properties(&self) -> HashMap<String, String> {
-        self.inner.properties.clone()
+    fn property_names(&self) -> PyResult<Vec<String>> {
+        self.inner.property_names().map_err(match_error)
     }
 
     #[getter]

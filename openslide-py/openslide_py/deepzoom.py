@@ -26,20 +26,24 @@ import math
 
 from PIL import Image
 from io import BytesIO
+from typing import Tuple, List
 from xml.etree.ElementTree import ElementTree, Element, SubElement
 
-import openslide_py.open_slide as openslide
+from openslide_py import OpenSlide
+from openslide_py import PROPERTY_NAME_BOUNDS_X, PROPERTY_NAME_BOUNDS_Y, \
+    PROPERTY_NAME_BOUNDS_WIDTH, PROPERTY_NAME_BOUNDS_HEIGHT, PROPERTY_NAME_BACKGROUND_COLOR
 
 
 class DeepZoomGenerator:
     """Generates Deep Zoom tiles and metadata."""
 
-    BOUNDS_OFFSET_PROPS = (openslide.PROPERTY_NAME_BOUNDS_X,
-                           openslide.PROPERTY_NAME_BOUNDS_Y)
-    BOUNDS_SIZE_PROPS = (openslide.PROPERTY_NAME_BOUNDS_WIDTH,
-                         openslide.PROPERTY_NAME_BOUNDS_HEIGHT)
+    BOUNDS_OFFSET_PROPS = (PROPERTY_NAME_BOUNDS_X,
+                           PROPERTY_NAME_BOUNDS_Y)
+    BOUNDS_SIZE_PROPS = (PROPERTY_NAME_BOUNDS_WIDTH,
+                         PROPERTY_NAME_BOUNDS_HEIGHT)
 
-    def __init__(self, osr, tile_size=254, overlap=1, limit_bounds=False):
+    def __init__(self, osr: OpenSlide, tile_size: int = 254, overlap: int = 1,
+                 limit_bounds: bool = False):
         """Create a DeepZoomGenerator wrapping an OpenSlide object.
 
         osr:          a slide object.
@@ -112,34 +116,34 @@ class DeepZoomGenerator:
 
         # Slide background color
         self._bg_color = '#' + self._osr.properties.get(
-            openslide.PROPERTY_NAME_BACKGROUND_COLOR, 'ffffff')
+            PROPERTY_NAME_BACKGROUND_COLOR, 'ffffff')
 
-    def __repr__(self):
-        return '%s(%r, tile_size=%r, overlap=%r, limit_bounds=%r)' % (
-            self.__class__.__name__, self._osr, self._z_t_downsample,
-            self._z_overlap, self._limit_bounds)
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._osr}, " \
+               f"tile_size={self._z_t_downsample}, overlap={self._z_overlap}, " \
+               f"limit_bounds={self._limit_bounds})"
 
     @property
-    def level_count(self):
+    def level_count(self) -> int:
         """The number of Deep Zoom levels in the image."""
         return self._dz_levels
 
     @property
-    def level_tiles(self):
+    def level_tiles(self) -> List[int]:
         """A list of (tiles_x, tiles_y) tuples for each Deep Zoom level."""
         return self._t_dimensions
 
     @property
-    def level_dimensions(self):
+    def level_dimensions(self) -> List[Tuple[int, int]]:
         """A list of (pixels_x, pixels_y) tuples for each Deep Zoom level."""
         return self._z_dimensions
 
     @property
-    def tile_count(self):
+    def tile_count(self) -> int:
         """The total number of Deep Zoom tiles in the image."""
         return sum(t_cols * t_rows for t_cols, t_rows in self._t_dimensions)
 
-    def get_tile(self, level, address):
+    def get_tile(self, level: int, address: Tuple[int, int]) -> Image.Image:
         """Return an RGB PIL.Image for a tile.
 
         level:     the Deep Zoom level.
@@ -160,7 +164,8 @@ class DeepZoomGenerator:
 
         return tile
 
-    def _get_tile_info(self, dz_level, t_location):
+    def _get_tile_info(self, dz_level: int, t_location: Tuple[int, int]) \
+            -> Tuple[Tuple[Tuple[int, int], int, Tuple[int, int]], Tuple[int, int]]:
         # Check parameters
         if dz_level < 0 or dz_level >= self._dz_levels:
             raise ValueError("Invalid level")
@@ -198,7 +203,7 @@ class DeepZoomGenerator:
                        zip(l_location, z_size, self._l_dimensions[slide_level]))
 
         # Return read_region() parameters plus tile size for final scaling
-        return ((l0_location, slide_level, l_size), z_size)
+        return (l0_location, slide_level, l_size), z_size
 
     def _l0_from_l(self, slide_level, l):
         return self._l0_l_downsamples[slide_level] * l
@@ -209,7 +214,7 @@ class DeepZoomGenerator:
     def _z_from_t(self, t):
         return self._z_t_downsample * t
 
-    def get_tile_coordinates(self, level, address):
+    def get_tile_coordinates(self, level: int, address: Tuple[int, int]) -> Tuple[int, int]:
         """Return the OpenSlide.read_region() arguments for the specified tile.
 
         Most users should call get_tile() rather than calling
@@ -220,7 +225,7 @@ class DeepZoomGenerator:
                    tuple."""
         return self._get_tile_info(level, address)[0]
 
-    def get_tile_dimensions(self, level, address):
+    def get_tile_dimensions(self, level: int, address: Tuple[int, int]) -> Tuple[int, int]:
         """Return a (pixels_x, pixels_y) tuple for the specified tile.
 
         level:     the Deep Zoom level.
@@ -228,10 +233,14 @@ class DeepZoomGenerator:
                    tuple."""
         return self._get_tile_info(level, address)[1]
 
-    def get_dzi(self, format):
+    def get_dzi(self, format: str):
         """Return a string containing the XML metadata for the .dzi file.
 
         format:    the format of the individual tiles ('png' or 'jpeg')"""
+        if format not in ['png', 'jpeg']:
+            raise ValueError(f"format must be one of ['png', 'jpeg']. "
+                             f"Given {format}")
+
         image = Element('Image', TileSize=str(self._z_t_downsample),
                         Overlap=str(self._z_overlap), Format=format,
                         xmlns='http://schemas.microsoft.com/deepzoom/2008')
