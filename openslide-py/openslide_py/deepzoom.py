@@ -22,18 +22,16 @@
 This module provides functionality for generating Deep Zoom images from
 OpenSlide objects.
 """
-
-from __future__ import division
-from io import BytesIO
 import math
+
+from PIL import Image
+from io import BytesIO
+from xml.etree.ElementTree import ElementTree, Element, SubElement
 
 import openslide_py.open_slide as openslide
 
-from PIL import Image
-from xml.etree.ElementTree import ElementTree, Element, SubElement
 
-
-class DeepZoomGenerator(object):
+class DeepZoomGenerator:
     """Generates Deep Zoom tiles and metadata."""
 
     BOUNDS_OFFSET_PROPS = (openslide.PROPERTY_NAME_BOUNDS_X,

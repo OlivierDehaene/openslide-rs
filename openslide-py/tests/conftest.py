@@ -1,6 +1,7 @@
 import pytest
 
 from pathlib import Path
+from openslide_py import OpenSlide
 
 
 @pytest.fixture
@@ -31,3 +32,8 @@ def small_svs():
 @pytest.fixture
 def unreadable_svs():
     return Path("assets/unreadable.svs")
+
+
+@pytest.fixture
+def boxes_tiff_slide(boxes_tiff):
+    return OpenSlide(boxes_tiff)

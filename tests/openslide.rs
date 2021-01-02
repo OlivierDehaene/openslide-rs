@@ -5,14 +5,14 @@ use std::path::Path;
 mod common;
 
 #[test]
-#[should_panic(expected = "MissingFile: __missing")]
+#[should_panic(expected = "File __missing does not exist")]
 fn test_detect_format_missing() {
     let missing_file = common::missing_file();
     OpenSlide::detect_vendor(missing_file).unwrap();
 }
 
 #[test]
-#[should_panic(expected = "UnsupportedFile: Cargo.toml")]
+#[should_panic(expected = "Unsupported format: Cargo.toml")]
 fn test_detect_format_unsupported() {
     let missing_file = common::unsupported_file();
     OpenSlide::detect_vendor(missing_file).unwrap();
@@ -28,21 +28,21 @@ fn test_detect_format() {
 }
 
 #[test]
-#[should_panic(expected = "MissingFile: __missing")]
+#[should_panic(expected = "File __missing does not exist")]
 fn test_open_missing() {
     let missing_file = common::missing_file();
     OpenSlide::open(missing_file).unwrap();
 }
 
 #[test]
-#[should_panic(expected = "UnsupportedFile: Cargo.toml")]
+#[should_panic(expected = "Unsupported format: Cargo.toml")]
 fn test_open_unsupported() {
     let missing_file = common::unsupported_file();
     OpenSlide::open(missing_file).unwrap();
 }
 
 #[test]
-#[should_panic(expected = "InternalError: Unsupported TIFF compression: 52479")]
+#[should_panic(expected = "Unsupported TIFF compression: 52479")]
 fn test_open_unsupported_tiff() {
     let unopenable_tiff = common::unopenable_tiff();
     OpenSlide::open(unopenable_tiff).unwrap();
@@ -75,7 +75,7 @@ fn test_properties() {
     let slide = OpenSlide::open(common::boxes_tiff()).unwrap();
 
     assert_eq!(
-        slide.properties.get("openslide.vendor").unwrap(),
+        slide.property("openslide.vendor").unwrap(),
         "generic-tiff"
     );
 }
@@ -110,7 +110,7 @@ fn test_thumbnail() {
 }
 
 #[test]
-#[should_panic(expected = "InternalError: Associated image __missing does not exist")]
+#[should_panic(expected = "Key __missing does not exist")]
 fn test_associated_images() {
     let slide = OpenSlide::open(common::small_svs()).unwrap();
 
@@ -123,7 +123,7 @@ fn test_associated_images() {
 
 #[test]
 #[should_panic(
-    expected = "InternalError: Corrupt JPEG data: 226 extraneous bytes before marker 0xd9"
+    expected = "Corrupt JPEG data: 226 extraneous bytes before marker 0xd9"
 )]
 fn test_read_bad_region() {
     let slide = OpenSlide::open(common::unreadable_svs()).unwrap();
@@ -138,7 +138,7 @@ fn test_read_bad_region() {
 }
 
 #[test]
-#[should_panic(expected = "InternalError: TIFFRGBAImageGet failed")]
+#[should_panic(expected = "TIFFRGBAImageGet failed")]
 fn test_read_bad_associated_image() {
     let slide = OpenSlide::open(common::unreadable_svs()).unwrap();
     slide.associated_image("thumbnail").unwrap();

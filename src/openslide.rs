@@ -28,8 +28,8 @@ impl fmt::Display for Address {
 }
 
 impl<T> From<(T, T)> for Address
-where
-    T: Clone + Into<u32>,
+    where
+        T: Clone + Into<u32>,
 {
     fn from(address: (T, T)) -> Self {
         Address {
@@ -46,8 +46,8 @@ pub struct Size {
 }
 
 impl<T> From<(T, T)> for Size
-where
-    T: Clone + Into<u32>,
+    where
+        T: Clone + Into<u32>,
 {
     fn from(size: (T, T)) -> Self {
         Size {
@@ -65,10 +65,7 @@ pub struct Region {
 }
 
 pub struct OpenSlide {
-    /// OpenSlide sys
     data: *mut sys::OpenSlide,
-    /// Properties
-    pub properties: HashMap<String, String>,
 }
 
 unsafe impl Send for OpenSlide {}
@@ -115,7 +112,6 @@ impl OpenSlide {
 
         let slide = OpenSlide {
             data: slide_ptr,
-            properties: get_properties(slide_ptr)?,
         };
 
         Ok(slide)
@@ -214,6 +210,40 @@ impl OpenSlide {
         ))
     }
 
+    pub fn property_names(&self) -> Result<Vec<String>> {
+        unsafe {
+            let name_array = sys::openslide_get_property_names(self.data);
+            get_error(self.data)?;
+
+            Ok(parse_null_terminated_array(name_array).collect())
+        }
+    }
+
+    pub fn property(&self, name: &str) -> Result<String> {
+        if !self.property_names()?.iter().any(|n| n == name) {
+            return Err(OpenSlideError::KeyError(name.into()
+            ));
+        };
+
+        let cstr = CString::new(name).unwrap();
+        let value = unsafe {
+            let slice = sys::openslide_get_property_value(self.data, cstr.as_ptr());
+
+            if slice.is_null() {
+                None
+            } else {
+                Some(CStr::from_ptr(slice).to_string_lossy().into_owned())
+            }
+        };
+        get_error(self.data)?;
+
+        match value {
+            None => Err(OpenSlideError::KeyError(name.into())),
+            Some(value) => Ok(value),
+        }
+    }
+
+
     pub fn associated_image_names(&self) -> Result<Vec<String>> {
         unsafe {
             let name_array = sys::openslide_get_associated_image_names(self.data);
@@ -225,10 +255,8 @@ impl OpenSlide {
 
     pub fn associated_image(&self, name: &str) -> Result<RgbaImage> {
         if !self.associated_image_names()?.iter().any(|n| n == name) {
-            return Err(OpenSlideError::InternalError(format!(
-                "Associated image {} does not exist",
-                name
-            )));
+            return Err(OpenSlideError::KeyError(name.into()
+            ));
         };
 
         let cstr = CString::new(name).unwrap();
@@ -299,71 +327,17 @@ fn get_error(slide_ptr: *mut sys::OpenSlide) -> Result<()> {
     }
 }
 
-fn get_property(slide_ptr: *mut sys::OpenSlide, name: &str) -> Result<String> {
-    let cstr = CString::new(name).unwrap();
-    let value = unsafe {
-        let slice = sys::openslide_get_property_value(slide_ptr, cstr.as_ptr());
-
-        if slice.is_null() {
-            None
-        } else {
-            Some(CStr::from_ptr(slice).to_string_lossy().into_owned())
-        }
-    };
-    get_error(slide_ptr)?;
-
-    match value {
-        None => Err(OpenSlideError::KeyError(name.into())),
-        Some(value) => Ok(value),
-    }
-}
-
-fn get_properties(slide_ptr: *mut sys::OpenSlide) -> Result<HashMap<String, String>> {
-    unsafe {
-        let name_array = sys::openslide_get_property_names(slide_ptr);
-        get_error(slide_ptr)?;
-
-        let mut properties = HashMap::new();
-
-        for name in parse_null_terminated_array(name_array) {
-            let value = get_property(slide_ptr, &name)?;
-            properties.insert(name, value);
-        }
-        Ok(properties)
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "InternalError: Unsupported TIFF compression: 52479")]
+    #[should_panic(expected = "Unsupported TIFF compression: 52479")]
     fn test_get_error() {
         let path_cstr = CString::new("tests/assets/unopenable.tiff").unwrap();
         let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
 
         get_error(slide_ptr).unwrap();
-    }
-
-    #[test]
-    #[should_panic(expected = "KeyError: __missing")]
-    fn test_get_property() {
-        let path_cstr = CString::new("tests/assets/boxes.tiff").unwrap();
-        let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
-
-        let value = get_property(slide_ptr, "openslide.vendor").unwrap();
-        assert_eq!(value, "generic-tiff");
-
-        get_property(slide_ptr, "__missing").unwrap();
-    }
-
-    #[test]
-    fn test_get_properties() {
-        let path_cstr = CString::new("tests/assets/boxes.tiff").unwrap();
-        let slide_ptr = unsafe { sys::openslide_open(path_cstr.as_ptr()) };
-
-        let properties = get_properties(slide_ptr).unwrap();
-        assert_eq!(properties.get("openslide.vendor").unwrap(), "generic-tiff");
     }
 }
