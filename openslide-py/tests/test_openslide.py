@@ -19,8 +19,9 @@
 
 import pytest
 
-from openslide_py import OpenSlide
-from PIL import Image
+import numpy as np
+
+from openslide_py import OpenSlide, OpenSlideError, OpenSlideUnsupportedFormatError
 
 
 def test_detect_format_missing(missing_file):
@@ -29,8 +30,7 @@ def test_detect_format_missing(missing_file):
 
 
 def test_detect_format_unsupported(unsupported_file):
-    # TODO
-    with pytest.raises(OSError):
+    with pytest.raises(OpenSlideUnsupportedFormatError):
         OpenSlide.detect_format(unsupported_file)
 
 
@@ -44,20 +44,18 @@ def test_open_missing(missing_file):
 
 
 def test_open_unsupported(unsupported_file):
-    # TODO
-    with pytest.raises(OSError):
+    with pytest.raises(OpenSlideUnsupportedFormatError):
         OpenSlide(unsupported_file)
 
 
 def test_open_unopenable(unopenable_tiff):
-    # TODO
-    with pytest.raises(OSError):
+    with pytest.raises(OpenSlideError):
         OpenSlide(unopenable_tiff)
 
 
 def test_context_manager(boxes_tiff):
     slide = OpenSlide(boxes_tiff)
-    with  slide:
+    with slide:
         assert slide.level_count == 4
 
     with pytest.raises(AttributeError):
@@ -77,10 +75,8 @@ def test_basic_metadata(boxes_tiff):
     assert slide.dimensions == (300, 250)
     assert len(slide.level_downsamples) == slide.level_count
     assert slide.level_downsamples[0:2] == [1, 2]
-    # TODO
-    #         self.assertAlmostEqual(self.osr.level_downsamples[2], 4, places=0)
-    #         self.assertAlmostEqual(self.osr.level_downsamples[3], 8, places=0)
-
+    np.testing.assert_almost_equal(slide.level_downsamples[2], 4, decimal=1)
+    np.testing.assert_almost_equal(slide.level_downsamples[3], 8, decimal=1)
     assert slide.get_best_level_for_downsample(0.5) == 0
     assert slide.get_best_level_for_downsample(3) == 1
     assert slide.get_best_level_for_downsample(37) == 3
@@ -93,6 +89,12 @@ def test_properties(boxes_tiff):
 
     with pytest.raises(KeyError):
         slide.properties["__missing"]
+
+
+def test_read_region_2GB(boxes_tiff):
+    slide = OpenSlide(boxes_tiff)
+
+    assert slide.read_region((1000, 1000), 0, (32768, 16384)).size == (32768, 16384)
 
 
 def test_thumbnail(boxes_tiff):
@@ -115,8 +117,7 @@ def test_read_bad_region(unreadable_svs):
 
     assert slide.properties["openslide.vendor"] == "aperio"
 
-    # TODO
-    with pytest.raises(OSError):
+    with pytest.raises(OpenSlideError):
         slide.read_region((0, 0), 0, (16, 16))
 
 
@@ -125,6 +126,8 @@ def test_read_bad_associated_image(unreadable_svs):
 
     assert slide.properties["openslide.vendor"] == "aperio"
 
-    # TODO
-    # with pytest.raises(OSError):
-    slide.associated_images["thumbnail"]
+    with pytest.raises(OpenSlideError):
+        slide.associated_images["thumbnail"]
+
+    assert len([v for v in slide.associated_images]) == len(slide.associated_images)
+

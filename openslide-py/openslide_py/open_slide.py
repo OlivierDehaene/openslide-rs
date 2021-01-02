@@ -3,19 +3,19 @@ from typing import Union
 from pathlib import Path
 from collections.abc import Mapping
 
-from .openslide_py import _OpenSlide
+from .openslide_py import _OpenSlide, OpenSlideError
 
-PROPERTY_NAME_COMMENT          = u'openslide.comment'
-PROPERTY_NAME_VENDOR           = u'openslide.vendor'
-PROPERTY_NAME_QUICKHASH1       = u'openslide.quickhash-1'
+PROPERTY_NAME_COMMENT = u'openslide.comment'
+PROPERTY_NAME_VENDOR = u'openslide.vendor'
+PROPERTY_NAME_QUICKHASH1 = u'openslide.quickhash-1'
 PROPERTY_NAME_BACKGROUND_COLOR = u'openslide.background-color'
-PROPERTY_NAME_OBJECTIVE_POWER  = u'openslide.objective-power'
-PROPERTY_NAME_MPP_X            = u'openslide.mpp-x'
-PROPERTY_NAME_MPP_Y            = u'openslide.mpp-y'
-PROPERTY_NAME_BOUNDS_X         = u'openslide.bounds-x'
-PROPERTY_NAME_BOUNDS_Y         = u'openslide.bounds-y'
-PROPERTY_NAME_BOUNDS_WIDTH     = u'openslide.bounds-width'
-PROPERTY_NAME_BOUNDS_HEIGHT    = u'openslide.bounds-height'
+PROPERTY_NAME_OBJECTIVE_POWER = u'openslide.objective-power'
+PROPERTY_NAME_MPP_X = u'openslide.mpp-x'
+PROPERTY_NAME_MPP_Y = u'openslide.mpp-y'
+PROPERTY_NAME_BOUNDS_X = u'openslide.bounds-x'
+PROPERTY_NAME_BOUNDS_Y = u'openslide.bounds-y'
+PROPERTY_NAME_BOUNDS_WIDTH = u'openslide.bounds-width'
+PROPERTY_NAME_BOUNDS_HEIGHT = u'openslide.bounds-height'
 
 
 class _AssociatedImageMap(Mapping):
@@ -62,7 +62,11 @@ class OpenSlide:
         self._osr = _OpenSlide(str(filename))
 
     def close(self):
-        del self._osr
+        self._osr = None
+
+    def _check_closed(self):
+        if self._osr is None:
+            raise OpenSlideError("Slide object was closed")
 
     def __enter__(self):
         return self
@@ -75,15 +79,19 @@ class OpenSlide:
         return f"{self.__class__.__name__}({self._filename})"
 
     @classmethod
-    def detect_format(cls, filename: str):
+    def detect_format(cls, filename: Union[str, Path]):
         """Return a string describing the format vendor of the specified file.
 
         If the file format is not recognized, return None."""
+        if isinstance(filename, Path):
+            filename = str(filename)
+
         return _OpenSlide.detect_format(filename)
 
     @property
     def level_count(self):
         """The number of levels in the image."""
+        self._check_closed()
         return self._osr.level_count
 
     @property
@@ -91,6 +99,7 @@ class OpenSlide:
         """A list of (width, height) tuples, one for each level of the image.
 
         level_dimensions[n] contains the dimensions of level n."""
+        self._check_closed()
         return self._osr.all_level_dimensions
 
     @property
@@ -98,6 +107,7 @@ class OpenSlide:
         """A list of downsampling factors for each level of the image.
 
         level_downsample[n] contains the downsample factor of level n."""
+        self._check_closed()
         return self._osr.all_level_downsample
 
     @property
@@ -110,6 +120,7 @@ class OpenSlide:
         """Metadata about the image.
 
         This is a map: property name -> property value."""
+        self._check_closed()
         return self._osr.properties
 
     @property
@@ -120,10 +131,12 @@ class OpenSlide:
 
         Unlike in the C interface, the images accessible via this property
         are not premultiplied."""
+        self._check_closed()
         return _AssociatedImageMap(self._osr)
 
     def get_best_level_for_downsample(self, downsample):
         """Return the best level for displaying the given downsample."""
+        self._check_closed()
         return self._osr.best_level_for_downsample(downsample)
 
     def read_region(self, location, level, size):
@@ -136,6 +149,7 @@ class OpenSlide:
 
         Unlike in the C interface, the image data returned by this
         function is not premultiplied."""
+        self._check_closed()
         arr = self._osr.read_region(location, level, size)
         return Image.fromarray(arr)
 
@@ -143,6 +157,7 @@ class OpenSlide:
         """Return a PIL.Image containing an RGB thumbnail of the image.
 
         size:     the maximum size of the thumbnail."""
+        self._check_closed()
 
         downsample = max(*[dim / thumb for dim, thumb in
                            zip(self.dimensions, size)])

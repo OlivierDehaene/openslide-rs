@@ -12,14 +12,19 @@ use numpy::{IntoPyArray, PyArray3};
 use openslide_rs;
 use pyo3::ffi::PyOS_AfterFork;
 use pyo3::types::{PyDict, PyType};
+use pyo3::create_exception;
+use pyo3::exceptions::PyException;
 use std::collections::HashMap;
+
+create_exception!(openslide_py, OpenSlideError, PyException);
+create_exception!(openslide_py, OpenSlideUnsupportedFormatError, PyException);
 
 fn match_error(error: openslide_rs::OpenSlideError) -> PyErr {
     match error {
         openslide_rs::OpenSlideError::MissingFile(m) => PyFileNotFoundError::new_err(m),
-        openslide_rs::OpenSlideError::UnsupportedFile(m) => PyOSError::new_err(m),
+        openslide_rs::OpenSlideError::UnsupportedFile(m) => OpenSlideUnsupportedFormatError::new_err(m),
         openslide_rs::OpenSlideError::KeyError(m) => PyKeyError::new_err(m),
-        openslide_rs::OpenSlideError::InternalError(m) => PyOSError::new_err(m),
+        openslide_rs::OpenSlideError::InternalError(m) => OpenSlideError::new_err(m),
     }
 }
 
@@ -119,6 +124,8 @@ impl _OpenSlide {
 #[pymodule]
 fn openslide_py(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<_OpenSlide>()?;
+    m.add("OpenSlideError", py.get_type::<OpenSlideError>())?;
+    m.add("OpenSlideUnsupportedFormatError", py.get_type::<OpenSlideUnsupportedFormatError>())?;
 
     Ok(())
 }
