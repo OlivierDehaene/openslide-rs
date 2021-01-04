@@ -17,9 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Apt update
-      run: apt update
+      run: sudo apt update
     - name: Install dependencies
-      run: ./install_dependencies.sh
+      run: sudo ./install_dependencies.sh
     - name: Build
       run: cargo build --verbose
     - name: Run tests
