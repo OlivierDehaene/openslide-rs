@@ -1,11 +1,8 @@
-use std::error;
 use std::fmt;
 
-pub use deepzoom::DeepZoom;
 pub use openslide::{Address, OpenSlide, Region, Size};
 use std::fmt::Formatter;
 
-mod deepzoom;
 mod openslide;
 mod utils;
 
@@ -22,10 +19,10 @@ pub enum OpenSlideError {
 impl OpenSlideError {
     fn error_message(&self) -> String {
         match self {
-            Self::MissingFile(m) => format!("MissingFile: {}", m),
-            Self::UnsupportedFile(m) => format!("UnsupportedFile: {}", m),
-            Self::KeyError(m) => format!("KeyError: {}", m),
-            Self::InternalError(m) => format!("InternalError: {}", m),
+            Self::MissingFile(m) => format!("File {} does not exist", m),
+            Self::UnsupportedFile(m) => format!("Unsupported format: {}", m),
+            Self::KeyError(m) => format!("Key {} does not exist", m),
+            Self::InternalError(m) => m.to_string(),
         }
     }
 }

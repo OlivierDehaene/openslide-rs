@@ -54,7 +54,7 @@ pub(crate) fn parse_null_terminated_array(array: *const *const i8) -> impl Itera
     unsafe {
         let mut counter = 0;
         let mut loc = array;
-        while *loc != std::ptr::null() {
+        while !(*loc).is_null() {
             counter += 1;
             loc = loc.offset(1);
         }
@@ -81,13 +81,14 @@ pub(crate) enum WordRepresentation {
     /// From most significant bit to least significant bit: `[alpha, red, green, blue]`
     BigEndian,
     /// From most significant bit to least significant bit: `[blue, green, red, alpha]`
+    #[allow(dead_code)]
     LittleEndian,
 }
 
 /// This function takes a buffer, as the one obtained from openslide::read_region, and decodes into
 /// an Rgba image buffer.
 pub(crate) fn decode_buffer(
-    buffer: &Vec<u32>,
+    buffer: &[u32],
     width: u32,
     height: u32,
     word_representation: WordRepresentation,

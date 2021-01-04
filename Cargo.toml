@@ -8,15 +8,15 @@ edition = "2018"
 
 [dependencies]
 openslide-sys = { path = "openslide-sys" }
-libmath = "0.2"
 image = "0.23"
 byteorder = "1.3"
 
 [dev-dependencies]
 criterion = "0.3"
+libmath = "0.2"
 
 [[bench]]
-name = "deepzoom"
+name = "read_region"
 harness = false
 
 [workspace]
