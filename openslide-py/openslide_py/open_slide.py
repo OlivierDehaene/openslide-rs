@@ -19,7 +19,7 @@
 from PIL import Image
 from typing import Union, List, Callable, Any, Tuple
 from pathlib import Path
-from collections import Mapping
+from collections.abc import Mapping
 
 from . import PROPERTY_NAME_BACKGROUND_COLOR
 from .openslide_py import _OpenSlide, OpenSlideError

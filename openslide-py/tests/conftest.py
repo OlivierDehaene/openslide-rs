@@ -5,33 +5,38 @@ from openslide_py import OpenSlide
 
 
 @pytest.fixture
-def missing_file():
-    return Path("__missing")
+def assets() -> Path:
+    return Path(__file__).parent / "assets"
+
+
+@pytest.fixture
+def missing_file(assets):
+    return assets / "__missing"
 
 
 @pytest.fixture
 def unsupported_file():
-    return Path("conftest.py")
+    return Path(__file__)
 
 
 @pytest.fixture
-def boxes_tiff():
-    return Path("assets/boxes.tiff")
+def boxes_tiff(assets):
+    return assets / "boxes.tiff"
 
 
 @pytest.fixture
-def unopenable_tiff():
-    return Path("assets/unopenable.tiff")
+def unopenable_tiff(assets):
+    return assets / "unopenable.tiff"
 
 
 @pytest.fixture
-def small_svs():
-    return Path("assets/small.svs")
+def small_svs(assets):
+    return assets / "small.svs"
 
 
 @pytest.fixture
-def unreadable_svs():
-    return Path("assets/unreadable.svs")
+def unreadable_svs(assets):
+    return assets / "unreadable.svs"
 
 
 @pytest.fixture
