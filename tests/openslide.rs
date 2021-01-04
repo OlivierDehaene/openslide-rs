@@ -119,7 +119,7 @@ fn test_associated_images() {
 }
 
 #[test]
-#[should_panic(expected = "Corrupt JPEG data: 226 extraneous bytes before marker 0xd9")]
+#[should_panic]
 fn test_read_bad_region() {
     let slide = OpenSlide::open(common::unreadable_svs()).unwrap();
 

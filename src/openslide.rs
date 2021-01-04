@@ -15,9 +15,12 @@ use crate::utils::{
 };
 use crate::{OpenSlideError, Result};
 
+/// A basic x/y type
 #[derive(Debug, PartialEq)]
 pub struct Address {
+    /// x coordinate
     pub x: u32,
+    /// y coordinate
     pub y: u32,
 }
 
@@ -39,9 +42,12 @@ where
     }
 }
 
+/// A basic width/height type.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Size {
+    /// Height
     pub h: u32,
+    /// Width
     pub w: u32,
 }
 
@@ -57,13 +63,18 @@ where
     }
 }
 
+/// The coordinates of a region of a whole slide image.
 #[derive(Debug, PartialEq)]
 pub struct Region {
+    /// The top left coordinates
     pub address: Address,
+    /// The whole slide image level
     pub level: usize,
+    /// The size of the region
     pub size: Size,
 }
 
+/// The main OpenSlide type.
 pub struct OpenSlide {
     data: *mut sys::OpenSlide,
 }
@@ -79,7 +90,36 @@ impl Drop for OpenSlide {
     }
 }
 
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// use openslide_rs::{OpenSlide, OpenSlideError};
+///
+/// fn main() -> Result<(), OpenSlideError> {
+///     let filename = Path::new("tests/assets/default.svs");
+///     let os = OpenSlide::open(&filename)?;
+///     let num_levels = os.level_count()?;
+///     println!("Slide has {} levels", num_levels);
+///
+///     Ok(())
+/// }
+/// ```
 impl OpenSlide {
+    /// Quickly determine whether a whole slide image is recognized.
+    ///
+    /// Returns a string identifying the slide format vendor. This is equivalent
+    /// to the value of the #OPENSLIDE_PROPERTY_NAME_VENDOR property.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: path to a valid whole slide image.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::MissingFile`](enum.OpenSlideError.html#variant.MissingFile): the file does not exist
+    /// * [`OpenSlideError::UnsupportedFile`](enum.OpenSlideError.html#variant.UnsupportedFile): the file is not a valid whole slide image.
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn detect_vendor(path: &Path) -> Result<String> {
         if !path.exists() {
             return Err(OpenSlideError::MissingFile(path.display().to_string()));
@@ -97,6 +137,17 @@ impl OpenSlide {
         }
     }
 
+    /// Open a whole slide image.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: path to a valid whole slide image.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::MissingFile`](enum.OpenSlideError.html#variant.MissingFile): the file does not exist
+    /// * [`OpenSlideError::UnsupportedFile`](enum.OpenSlideError.html#variant.UnsupportedFile): the file is not a valid whole slide image.
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn open(path: &Path) -> Result<OpenSlide> {
         if !path.exists() {
             return Err(OpenSlideError::MissingFile(path.display().to_string()));
@@ -115,6 +166,15 @@ impl OpenSlide {
         Ok(slide)
     }
 
+    /// Set the cache size of the whole slide image
+    ///
+    /// # Arguments
+    ///
+    /// * `cache_size`: cache size in bytes
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn set_cache_size(&self, cache_size: u32) -> Result<()> {
         unsafe {
             sys::openslide_set_cache_size(self.data, cache_size as _);
@@ -122,7 +182,11 @@ impl OpenSlide {
         get_error(self.data)
     }
 
-    /// The number of levels in the image.
+    /// Get the number of levels in the whole slide image.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn level_count(&self) -> Result<u32> {
         let level_count = unsafe { sys::openslide_get_level_count(self.data) as u32 };
         get_error(self.data)?;
@@ -130,16 +194,34 @@ impl OpenSlide {
         Ok(level_count)
     }
 
+    /// Get the dimensions of level 0 (the largest level). Exactly equivalent
+    /// to calling [`level_dimensions(0)`](struct.OpenSlide.html#method.level_dimensions).
+    ///
+    /// # Arguments
+    ///
+    /// * `level`: The desired level.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::IndexError`](enum.OpenSlideError.html#variant.IndexError): level out of range
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn dimensions(&self) -> Result<Size> {
         self.level_dimensions(0)
     }
 
+    /// Get the dimensions of a level.
+    ///
+    /// # Arguments
+    ///
+    /// * `level`: The desired level.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::IndexError`](enum.OpenSlideError.html#variant.IndexError): level out of range
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn level_dimensions(&self, level: u32) -> Result<Size> {
         if level >= self.level_count()? {
-            return Err(OpenSlideError::InternalError(format!(
-                "Level {} out of range",
-                level
-            )));
+            return Err(OpenSlideError::IndexError(level.to_string()));
         }
 
         let mut w = 0;
@@ -156,12 +238,19 @@ impl OpenSlide {
         })
     }
 
+    /// Get the downsampling factor of a given level.Address
+    ///
+    /// # Arguments
+    ///
+    /// * `level`: The desired level.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::IndexError`](enum.OpenSlideError.html#variant.IndexError): level out of range
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn level_downsample(&self, level: u32) -> Result<f64> {
         if level >= self.level_count()? {
-            return Err(OpenSlideError::InternalError(format!(
-                "Level {} out of range",
-                level
-            )));
+            return Err(OpenSlideError::IndexError(level.to_string()));
         }
 
         let level_downsample =
@@ -171,6 +260,15 @@ impl OpenSlide {
         Ok(level_downsample)
     }
 
+    /// Get the best level to use for displaying the given downsample.
+    ///
+    /// # Arguments
+    ///
+    /// * `downsample`: The downsample factor.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn best_level_for_downsample(&self, downsample: f64) -> Result<u32> {
         let best_level =
             unsafe { sys::openslide_get_best_level_for_downsample(self.data, downsample) };
@@ -179,6 +277,16 @@ impl OpenSlide {
         Ok(best_level as _)
     }
 
+    /// This function reads and decompresses a region of a whole slide image into
+    /// a `RgbaImage`.
+    ///
+    /// # Arguments
+    ///
+    /// * `region`: the coordinates of the region to read.
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn read_region(&self, region: Region) -> Result<RgbaImage> {
         let Region {
             address,
@@ -209,6 +317,16 @@ impl OpenSlide {
         ))
     }
 
+    /// Get the property names vector.Address
+    ///
+    /// Certain vendor-specific metadata properties may exist within
+    /// a whole slide image. They are encoded as key-value pairs. This call provides
+    /// a vector of names as strings that can be used to read properties with
+    /// [`property()`](struct.OpenSlide.html#method.property).
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn property_names(&self) -> Result<Vec<String>> {
         unsafe {
             let name_array = sys::openslide_get_property_names(self.data);
@@ -218,6 +336,21 @@ impl OpenSlide {
         }
     }
 
+    /// Get the value of a single property.Address
+    ///
+    /// Certain vendor-specific metadata properties may exist within a
+    /// whole slide image. They are encoded as key-value paris. This call
+    /// provides the value of the property given by `name`.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the desired property. Must be a valid name
+    /// as given by [`property_names()`](struct.OpenSlide.html#method.property_names).
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::KeyError`](enum.OpenSlideError.html#variant.KeyError): `name` is not a valid name.
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn property(&self, name: &str) -> Result<String> {
         if !self.property_names()?.iter().any(|n| n == name) {
             return Err(OpenSlideError::KeyError(name.into()));
@@ -241,6 +374,15 @@ impl OpenSlide {
         }
     }
 
+    /// Get the associated image names vector.
+    ///
+    /// Certain vendor-specific associated images may exist within a whole slide image. They are
+    /// encoded as key-value pairs. This call provides a vector of names as strings that can be used
+    /// to read associated images with [`associated_image()`](struct.OpenSlide.html#method.associated_image).
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn associated_image_names(&self) -> Result<Vec<String>> {
         unsafe {
             let name_array = sys::openslide_get_associated_image_names(self.data);
@@ -250,6 +392,17 @@ impl OpenSlide {
         }
     }
 
+    /// Reads and decompresses an associated image associated with a whole slide image.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the desired associated image. Must be a valid name
+    /// as given by [`associated_image_names()`](struct.OpenSlide.html#method.associated_image_names).
+    ///
+    /// # Errors
+    ///
+    /// * [`OpenSlideError::KeyError`](enum.OpenSlideError.html#variant.KeyError): `name` is not a valid name.
+    /// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
     pub fn associated_image(&self, name: &str) -> Result<RgbaImage> {
         if !self.associated_image_names()?.iter().any(|n| n == name) {
             return Err(OpenSlideError::KeyError(name.into()));
@@ -309,6 +462,11 @@ impl OpenSlide {
     }
 }
 
+/// Get the current error string.
+///
+/// # Errors
+///
+/// * [`OpenSlideError::InternalError`](enum.OpenSlideError.html#variant.InternalError): an error occured in the C codebase.
 fn get_error(slide_ptr: *mut sys::OpenSlide) -> Result<()> {
     unsafe {
         let slice = sys::openslide_get_error(slide_ptr);

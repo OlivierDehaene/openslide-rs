@@ -50,6 +50,7 @@ pub(crate) fn resize_dimensions(
     }
 }
 
+/// Transform a null terminate array into an Iterator<String>
 pub(crate) fn parse_null_terminated_array(array: *const *const i8) -> impl Iterator<Item = String> {
     unsafe {
         let mut counter = 0;

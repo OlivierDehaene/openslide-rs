@@ -1,4 +1,4 @@
-use pyo3::exceptions::{PyFileNotFoundError, PyKeyError};
+use pyo3::exceptions::{PyFileNotFoundError, PyIndexError, PyKeyError};
 use pyo3::prelude::*;
 
 use std::path::Path;
@@ -21,6 +21,7 @@ fn match_error(error: openslide_rs::OpenSlideError) -> PyErr {
             OpenSlideUnsupportedFormatError::new_err(m)
         }
         openslide_rs::OpenSlideError::KeyError(m) => PyKeyError::new_err(m),
+        openslide_rs::OpenSlideError::IndexError(m) => PyIndexError::new_err(m),
         openslide_rs::OpenSlideError::InternalError(m) => OpenSlideError::new_err(m),
     }
 }
