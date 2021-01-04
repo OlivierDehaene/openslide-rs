@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 apt install -y libcairo2-dev
 apt install -y libgdk-pixbuf2.0-dev
