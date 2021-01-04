@@ -4,6 +4,4 @@ build-backend = "maturin"
 
 [tool.maturin]
 bindings = "pyo3"
-
-[package.metadata.maturin]
-requires-dist = ["pillow=~7.1.1", "numpy==1.19"]
+manylinux = "2014"

@@ -4,8 +4,6 @@ version = "0.1.0"
 authors = ["olivierD <olivier.dehaene@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 name = "openslide_py"
 crate-type = ["cdylib"]
@@ -19,3 +17,6 @@ ndarray-image = "0.2.1"
 [dependencies.pyo3]
 version = "0.12.0"
 features = ["extension-module"]
+
+[package.metadata.maturin]
+requires-dist = ["pillow~=7.1.1", "numpy~=1.19"]
