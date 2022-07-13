@@ -15,7 +15,7 @@ ndarray = "0.15"
 ndarray-image = "0.3.0"
 
 [dependencies.pyo3]
-version = "0.12.0"
+version = "0.16.5"
 features = ["extension-module"]
 
 [package.metadata.maturin]
