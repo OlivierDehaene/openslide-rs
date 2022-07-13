@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 openslide-rs = { path = "../" }
 numpy = "0.12"
-ndarray = "0.13"
+ndarray = "0.15"
 ndarray-image = "0.2.1"
 
 [dependencies.pyo3]
