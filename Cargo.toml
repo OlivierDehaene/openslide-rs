@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 openslide-sys = { path = "openslide-sys" }
-image = "^0.23"
+image = "^0.24"
 byteorder = "^1.4"
 
 [dev-dependencies]
